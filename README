@@ -1,0 +1,19 @@
+GnomePicross
+============
+
+This is a simple paint by numbers game. A good explanation of the
+game is given here: http://en.wikipedia.org/wiki/Paint_by_numbers
+
+It currently has a Gnome GUI.
+
+
+Installation
+------------
+
+You need PyGTK-2 and Glade2 for Python
+
+
+Running
+-------
+
+Simply type "python GnomePicross.py" in your terminal
