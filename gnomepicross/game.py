@@ -21,15 +21,8 @@ from random import randrange
 from zipfile import ZipFile
 from StringIO import StringIO
 
-from timer import PeriodicTimer
-
-
-
 # Constants
 DEFAULT_LEVELPACK = './data/default_pack.zip'
-DEFAULT_PLAYTIME = 1800
-DEFAULT_TIME_PENALTY = 120
-DEFAULT_TIME_PENALTY_CAP = 480
 
 SKILL_EASY = 'Easy'			# These values should match the
 SKILL_MEDIUM = 'Medium'		# the level files!
@@ -47,50 +40,26 @@ class Game(object):
 	"""A paint by numbers game also called nonogram.
 	"""
 	
-	def __init__(self,playTime=DEFAULT_PLAYTIME,timePenalty=DEFAULT_TIME_PENALTY,skill=None):
+	def __init__(self, skill=None):
 		"""Creates a picross game.
 
 		Parameters:
-			playTime	- Time to play (in seconds)
-			timePenalty	- Applied when the user opens a wrong field
 			skill		- Desired skill level (None == random)
 		"""
 		self.__level = None
 		self.__name = None
 		self.__skill = None
-		self.__gameOver = False
-		self.__playTime = self.__timeLeft = playTime
-		self.__timePenalty = timePenalty
-		self.__currentTimePenalty = self.__timePenalty
 		self.__fieldsToOpen = 0
 		self.__fieldsOpened = 0
-		self.__isPaused = False
-
 		self.load(skill=skill)
-
-		self.__timer = PeriodicTimer(delay=1,interval=1,callback=self.__timerCallback)
-		self.__timer.start()
 
 	#
 	# Miscellaneous methods
 	#
 
-	def __timerCallback(self):
-		"""Called by the timer every second.
-		"""
-		if self.__timeLeft <= 0:
-			self.__timer.cancel()
-			self.__gameOver = True
-		else:
-			if self.__fieldsOpened == self.__fieldsToOpen:
-				self.__timer.cancel()
-			else:
-				self.__timeLeft -= 1
-
-
 	def _debug_print(self):
 		print self.getInfo()
-		print 'go: %s time: %s' % (self.__gameOver,self.__timeLeft)
+		print 'go: %s' % (self.__gameOver)
 		for row in self.__level:
 			print row
 
@@ -141,27 +110,11 @@ class Game(object):
 		return hint
 
 
-	def getTimes(self):
-		"""Returns the time left and the overall time
-		"""
-		return self.__timeLeft,self.__playTime
-
-
 	def getField(self,col,row):
 		return self.__level[row][col]
 
-
-	def isGameOver(self):
-		return self.__gameOver
-
-
-	def isPaused(self):
-		return self.__isPaused
-
-
 	def isGameWon(self):
-		return (not self.__timer.isAlive()) and (not self.__gameOver)
-
+		return self.__fieldsOpened == self.__fieldsToOpen
 
 	#
 	# Game manipulation methods
@@ -170,25 +123,14 @@ class Game(object):
 	def restart(self):
 		"""Reinitializes the current game 
 		"""
-		for row in self.__level:
-			for field in row:
+		for i, row in enumerate(self.__level):
+			for j, field in enumerate(row):
 				if field == FIELD_OPEN or field == FIELD_MARKED_VALID:
-					self.__level[row][field] = FIELD_VALID
+					self.__level[i][j] = FIELD_VALID
 				elif field == FIELD_MARKED_INVALID:
-					self.__level[row][field] = FIELD_INVALID
+					self.__level[i][j] = FIELD_INVALID
 		self.__gameOver = False
-		self.__currentTimePenalty = self.__timePenalty
-		self.__timeLeft = self.__playTime
 		self.__fieldsOpened = 0
-
-
-	def pause(self):
-		if not self.__gameOver and not self.isGameWon:
-			self.__timer.pause()
-			self.__isPaused = not self.__isPaused
-			return True
-		else:
-			return False
 
 
 	def openField(self,col,row):
@@ -198,12 +140,6 @@ class Game(object):
 			self.__fieldsOpened += 1
 			return True
 		else:
-			self.__timeLeft -= self.__currentTimePenalty
-			self.__currentTimePenalty += self.__timePenalty
-			if self.__currentTimePenalty > DEFAULT_TIME_PENALTY_CAP:
-				self.__currentTimePenalty = DEFAULT_TIME_PENALTY_CAP
-			if self.__timeLeft < 0: 
-				self.__timeLeft = 0
 			return False
 
 
