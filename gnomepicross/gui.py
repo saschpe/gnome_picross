@@ -29,8 +29,7 @@ except:
 	sys.exit(1)
 
 from game import *
-
-
+from timer import *
 
 # CONSTANTS
 APP_NAME = 'GnomePicross'
@@ -67,32 +66,41 @@ class Gui(object):
 		self.__colHints = self.__window.get_widget('columnHints')
 		self.__level = self.__window.get_widget('level')
 		self.__timeLeft = self.__window.get_widget('timeLeft')
+		
 		self.__desiredSkill = SKILL_MEDIUM
 		self.__desiredPlayTime = 1800
+		self.__gameOver = False
+		self.__prefs_change = False
+		
 		# This will store the picross game
 		self.__game = None
 		self.__board.set_sensitive(False)
-		self.__timer = PeriodicTimer(delay=1,callback=self.__timerCallback)
+		self.__timer = GameTimer(delay=1,callback=self.__timerCallback)
+		self.__timer.setDaemon(True)
 		# Start the gtk main event loop and allow multiple threads to 
 		# serialize access to the Python interpreter
+		
 		gdk.threads_init()
-		self.__timer.start()
+		#self.__timer.start()
 		gtk.main()
 
 
 	def __timerCallback(self):
 		"""Periodically updates time bar and checks some game conditions.
 		"""
-		if self.__game:
-			if self.__game.isGameOver():
-				self.__board.set_sensitive(False)
-			elif self.__game.isGameWon():
-				self.__board.set_sensitive(False)
-			else:
-				timeleft,playtime = self.__game.getTimes()
-				self.__timeLeft.set_fraction(timeleft / float(playtime))
-				self.__timeLeft.set_text('%s:%s' % (int(timeleft / 60),int(timeleft % 60)))
-
+		
+		timeleft, playtime  = self.__timer.getTimes()
+		if timeleft <= 0 or self.__game.isGameWon():
+			self.__gameOver = True
+			self.__board.set_sensitive(False)
+			if not self.__game.isGameWon():
+				self.__timeLeft.set_fraction(0)
+				self.__timeLeft.set_text('0:0')
+				print "lose"
+			self.__timer.pause()
+		else:
+			self.__timeLeft.set_fraction(timeleft / float(playtime))
+			self.__timeLeft.set_text('%s:%s' % (int(timeleft / 60),int(timeleft % 60)))
 
 	#
 	# Visibility manipulation methods
@@ -202,6 +210,7 @@ class Gui(object):
 				if self.__game.openField(col,row):
 					widget.set_label('')
 					widget.set_sensitive(False)
+				else: self.__timer.applyPenalty()
 			elif event.button == 3:	# Right mouse button
 				state = self.__game.markField(col,row)
 				if state == FIELD_MARKED_INVALID or state == FIELD_MARKED_VALID:
@@ -209,24 +218,28 @@ class Gui(object):
 				else:
 					widget.set_label('')
 
-
 	def on_window_destroy(self,widget,event=None):
 		"""Called when the user wants to quit the app.
 		"""
 		gtk.main_quit()
-
-
+		
 	def on_new_activate(self,widget,event=None):
 		"""Called when the user starts a new game.
 		"""
-		self.__game = Game(skill=self.__desiredSkill,playTime=self.__desiredPlayTime)
+		
+		if self.__prefs_change:
+			self.__timer.setPlayTime(self.__desiredPlayTime)
+		if self.__timer.isAlive():
+			self.__timer.restart()
+		else:
+			self.__timer.start()
+			
+		self.__game = Game(skill=self.__desiredSkill)
 		
 		name,skill,size = self.__game.getInfo()
-		timeLeft,playTime = self.__game.getTimes()
 
 		self.__setBoardSize(size)
 		self.__level.set_label(name)
-		self.__timeLeft.set_fraction(timeLeft / float(playTime))
 		self.__clearBoard()
 
 		# Update the hints for rows and columns
@@ -248,12 +261,12 @@ class Gui(object):
 	def on_pause_activate(self,widget,event=None):
 		"""Called when the user presses the pause button.
 		"""
-		if self.__game:
-			if self.__game.pause():
-				if self.__game.isPaused():
-					self.__board.set_sensitive(False)
-				else:
-					self.__board.set_sensitive(True)
+		if self.__timer.isAlive() and not self.__gameOver:
+			self.__timer.pause()
+			if self.__timer.isPaused():
+				self.__board.set_sensitive(False)
+			else:
+				self.__board.set_sensitive(True)
 
 
 	def on_clear_activate(self,widget,event=None):
@@ -283,6 +296,7 @@ class Gui(object):
 				self.__desiredSkill = SKILL_MEDIUM
 			elif wt.get_widget('hard').get_active():
 				self.__desiredSkill = SKILL_HARD
+		self.__prefs_change = True
 		prefs.destroy()
 
 
@@ -290,7 +304,7 @@ class Gui(object):
 		about = gnome.ui.About(APP_NAME,APP_VERSION,
 			'(C) 2007 Sascha Peilicke',
 			'A simple paint by numbers game.',
-			['Sascha Peilicke <sasch.pe@gmx.de>'],
+			['Sascha Peilicke <sasch.pe@gmx.de>', 'Tvrtko Majstorovic <tvrtkom@gmail.com>'],
 			None,
 			u'Sascha Peilicke <sasch.pe@gmx.de>',
 			gdk.pixbuf_new_from_file(FOLDER_IMAGES+'picross_64x64.png'))
